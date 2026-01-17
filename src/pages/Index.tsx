@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StepIndicator } from "@/components/StepIndicator";
 import { ServiceSelection } from "@/components/booking/ServiceSelection";
 import { DateSelection } from "@/components/booking/DateSelection";
@@ -8,10 +8,18 @@ import { CustomerForm } from "@/components/booking/CustomerForm";
 import { PaymentScreen } from "@/components/booking/PaymentScreen";
 import { ConfirmationScreen } from "@/components/booking/ConfirmationScreen";
 import { useBooking, Appointment } from "@/hooks/useBooking";
-import { Sparkles, Calendar, ArrowRight, Clock, ChevronRight } from "lucide-react";
+import { Calendar, ChevronRight, Clock, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { services, Service, categories } from "@/data/services";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const steps = [
   { id: 1, label: "Serviço" },
@@ -20,6 +28,34 @@ const steps = [
   { id: 4, label: "Horário" },
   { id: 5, label: "Dados" },
 ];
+
+type SortOption = "popular" | "price_asc" | "price_desc" | "duration_asc" | "duration_desc";
+
+const sortLabels: Record<SortOption, string> = {
+  popular: "Populares",
+  price_asc: "Menor preço",
+  price_desc: "Maior preço",
+  duration_asc: "Menor duração",
+  duration_desc: "Maior duração",
+};
+
+const durationToMinutes = (duration: string) => {
+  // Exemplos: "2h", "1h30", "45min"
+  const d = duration.toLowerCase().replace(/\s+/g, "");
+
+  if (d.includes("h")) {
+    const [hPart, rest] = d.split("h");
+    const hours = Number.parseInt(hPart || "0", 10) || 0;
+    const minutes = rest ? Number.parseInt(rest.replace("min", "") || "0", 10) || 0 : 0;
+    return hours * 60 + minutes;
+  }
+
+  if (d.includes("min")) {
+    return Number.parseInt(d.replace("min", ""), 10) || 0;
+  }
+
+  return 0;
+};
 
 const Index = () => {
   const {
@@ -38,7 +74,13 @@ const Index = () => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [currentAppointment, setCurrentAppointment] = useState<Appointment | null>(null);
   const [showBooking, setShowBooking] = useState(false);
+
   const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [sortOption, setSortOption] = useState<SortOption>("popular");
+
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [draftCategory, setDraftCategory] = useState("Todos");
+  const [draftSort, setDraftSort] = useState<SortOption>("popular");
 
   const handleProceedToPayment = () => {
     const appointment = saveAppointment();
@@ -74,9 +116,33 @@ const Index = () => {
     nextStep();
   };
 
-  const filteredServices = selectedCategory === "Todos" 
-    ? services 
-    : services.filter(s => s.category === selectedCategory);
+  const filteredServices = useMemo(() => {
+    const byCategory =
+      selectedCategory === "Todos" ? services : services.filter((s) => s.category === selectedCategory);
+
+    const sorted = [...byCategory].sort((a, b) => {
+      switch (sortOption) {
+        case "popular": {
+          const ap = a.popular ? 1 : 0;
+          const bp = b.popular ? 1 : 0;
+          if (bp !== ap) return bp - ap;
+          return a.name.localeCompare(b.name);
+        }
+        case "price_asc":
+          return a.price - b.price;
+        case "price_desc":
+          return b.price - a.price;
+        case "duration_asc":
+          return durationToMinutes(a.duration) - durationToMinutes(b.duration);
+        case "duration_desc":
+          return durationToMinutes(b.duration) - durationToMinutes(a.duration);
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [selectedCategory, sortOption]);
 
   const renderStep = () => {
     if (showConfirmation) {
@@ -191,23 +257,121 @@ const Index = () => {
             </div>
           </section>
 
-          {/* Filtros modernos */}
+          {/* Filtros + botão Filtrar */}
           <section className="container pb-8">
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-              {categories.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`px-6 py-3 rounded-2xl text-sm font-bold whitespace-nowrap transition-all duration-300 ${
-                    selectedCategory === category
-                      ? "gradient-primary text-white shadow-glow"
-                      : "bg-card text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/50"
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-2xl px-4 h-12 font-bold"
+                onClick={() => {
+                  setDraftCategory(selectedCategory);
+                  setDraftSort(sortOption);
+                  setFilterOpen(true);
+                }}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                Filtrar
+              </Button>
+
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={`px-6 py-3 rounded-2xl text-sm font-bold whitespace-nowrap transition-all duration-300 ${
+                      selectedCategory === category
+                        ? "gradient-primary text-white shadow-glow"
+                        : "bg-card text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/50"
+                    }`}
+                    type="button"
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
+              <DialogContent className="max-w-lg rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle className="font-display">Filtrar serviços</DialogTitle>
+                  <DialogDescription>
+                    Escolha uma categoria e como deseja ordenar a lista.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-foreground">Categorias</p>
+                    <div className="flex flex-wrap gap-2">
+                      {categories.map((category) => (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => setDraftCategory(category)}
+                          className={`px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200 ${
+                            draftCategory === category
+                              ? "gradient-primary text-white shadow-glow"
+                              : "bg-card text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/50"
+                          }`}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-foreground">Ordenar por</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {(Object.keys(sortLabels) as SortOption[]).map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setDraftSort(opt)}
+                          className={`px-4 py-3 rounded-2xl text-sm font-bold text-left transition-all duration-200 border ${
+                            draftSort === opt
+                              ? "border-primary/40 bg-primary/10 text-foreground"
+                              : "border-border/50 bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          }`}
+                        >
+                          {sortLabels[opt]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => {
+                      setDraftCategory("Todos");
+                      setDraftSort("popular");
+                      setSelectedCategory("Todos");
+                      setSortOption("popular");
+                      setFilterOpen(false);
+                    }}
+                  >
+                    Limpar
+                  </Button>
+                  <Button
+                    type="button"
+                    className="rounded-2xl"
+                    onClick={() => {
+                      setSelectedCategory(draftCategory);
+                      setSortOption(draftSort);
+                      setFilterOpen(false);
+                    }}
+                  >
+                    Aplicar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </section>
 
           {/* Grid de serviços premium */}
