@@ -175,6 +175,16 @@
     background-clip: text;
   }
 
+  /* Hide scrollbar but keep scroll (mobile filters) */
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Safari and Chrome */
+  }
+
   /* Glass effect */
   .glass {
     background: hsl(var(--card) / 0.7);
