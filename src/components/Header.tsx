@@ -1,9 +1,17 @@
-import { Sparkles, Calendar, LayoutDashboard, Users } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Sparkles, Calendar, LayoutDashboard, Users, LogIn, LogOut } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/auth/AuthProvider";
 
 export const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, loading, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/", { replace: true });
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-lg">
@@ -51,6 +59,28 @@ export const Header = () => {
               <span className="hidden sm:inline">Dashboard</span>
             </Button>
           </Link>
+
+          {!loading && (
+            user ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                onClick={handleSignOut}
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Sair</span>
+              </Button>
+            ) : (
+              <Link to="/auth" state={{ from: location }}>
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <LogIn className="w-4 h-4" />
+                  <span className="hidden sm:inline">Entrar</span>
+                </Button>
+              </Link>
+            )
+          )}
         </nav>
       </div>
     </header>
